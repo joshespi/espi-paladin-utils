@@ -25,6 +25,8 @@ local defaults = {
     enabled = true,
     sound = true,
     soundOther = true,   -- soft one-shot cue for expiring / no attack / range / facing
+    alertSound = "RAID_WARNING",  -- SOUNDKIT key for the "no seal" alert
+    softSound = "MAP_PING",       -- SOUNDKIT key for the soft cues
     size = 64,
     point = { "CENTER", "UIParent", "CENTER", 0, 180 },
     warnTime = 5,        -- seconds left to show the "expiring" cue, 0 = off
@@ -46,6 +48,43 @@ local VISUALS = {
 }
 
 local issecret = issecretvalue or function() return false end
+
+-- Dropdown choices (SOUNDKIT key, label). Entries the client lacks are dropped.
+-- TELL_MESSAGE is deliberately absent: it's the whisper sound.
+local SOUND_CHOICES = {}
+for _, c in ipairs({
+    { "RAID_WARNING", "Raid Warning" },
+    { "MAP_PING", "Map Ping" },
+    { "READY_CHECK", "Ready Check" },
+    { "ALARM_CLOCK_WARNING_3", "Alarm Clock" },
+    { "UI_BNET_TOAST", "Toast" },
+    { "IG_PLAYER_INVITE", "Party Invite" },
+    { "PVP_THROUGH_QUEUE", "PvP Queue" },
+    { "LEVELUP", "Level Up" },
+    { "AUCTION_WINDOW_OPEN", "Auction Bell" },
+    { "IG_MAINMENU_OPTION_CHECKBOX_ON", "Click" },
+}) do
+    if SOUNDKIT and SOUNDKIT[c[1]] then
+        SOUND_CHOICES[#SOUND_CHOICES + 1] = { key = c[1], label = c[2] }
+    end
+end
+
+local function FindChoice(key)
+    for _, c in ipairs(SOUND_CHOICES) do
+        if c.key == key then return c end
+    end
+end
+
+-- Unknown/missing key falls back to the per-setting default (fallbackKey).
+local function SoundLabel(key, fallbackKey)
+    local c = FindChoice(key) or FindChoice(fallbackKey)
+    return c and c.label or "Default"
+end
+
+local function PlayChoice(key, fallbackKey)
+    local id = SOUNDKIT and (SOUNDKIT[key] or (fallbackKey and SOUNDKIT[fallbackKey]))
+    if id then PlaySound(id, "Master") end
+end
 
 local db
 local category              -- Settings category, if registered
@@ -210,12 +249,12 @@ local function Update()
         local fresh = visual ~= "alert"
         local again = db.repeatEvery > 0 and now - lastPing >= db.repeatEvery
         if db.sound and (fresh or again) then
-            PlaySound(SOUNDKIT.RAID_WARNING, "Master")
+            PlayChoice(db.alertSound, defaults.alertSound)
             lastPing = now
         end
     elseif state and state ~= "unlock" and state ~= visual and db.soundOther
-        and SOUNDKIT.TELL_MESSAGE and now - lastSoft >= SOFT_COOLDOWN then
-        PlaySound(SOUNDKIT.TELL_MESSAGE, "Master")
+        and now - lastSoft >= SOFT_COOLDOWN then
+        PlayChoice(db.softSound, defaults.softSound)
         lastSoft = now
     end
 
@@ -405,8 +444,40 @@ local function BuildOptions()
         return b
     end
 
+    local DROPDOWN_LEFT_X, DROPDOWN_RIGHT_X, DROPDOWN_ROW_HEIGHT = 16, 260, 56
+
+    local function SoundDropdown(text, key, x)
+        local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        fs:SetPoint("TOPLEFT", x, y)
+        fs:SetText(text)
+        local dd = CreateFrame("Frame", "SealCheckDropdown" .. key, panel, "UIDropDownMenuTemplate")
+        dd:SetPoint("TOPLEFT", fs, "BOTTOMLEFT", -16, -2)
+        UIDropDownMenu_SetWidth(dd, 180)
+        UIDropDownMenu_Initialize(dd, function()
+            for _, c in ipairs(SOUND_CHOICES) do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = c.label
+                info.checked = db[key] == c.key
+                info.func = function()
+                    db[key] = c.key
+                    UIDropDownMenu_SetText(dd, c.label)
+                    CloseDropDownMenus()
+                    PlayChoice(c.key)   -- preview
+                end
+                UIDropDownMenu_AddButton(info)
+            end
+        end)
+        refreshers[#refreshers + 1] = function()
+            UIDropDownMenu_SetText(dd, SoundLabel(db[key], defaults[key]))
+        end
+    end
+
     for _, t in ipairs(TOGGLES) do Check(t) end
     y = y - 8
+    -- side by side to save vertical space
+    SoundDropdown("Alert sound (no seal)", "alertSound", DROPDOWN_LEFT_X)
+    SoundDropdown("Soft sound (other warnings)", "softSound", DROPDOWN_RIGHT_X)
+    y = y - DROPDOWN_ROW_HEIGHT
     for _, n in ipairs(NUMBERS) do Slider(n) end
     y = y - 8
 

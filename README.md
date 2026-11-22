@@ -12,6 +12,7 @@ Buffs are hidden ("secret") in combat, so it tracks your seal by watching your o
 - **NO AUTO ATTACK** warning when you're in combat but not auto-attacking
 - **TOO FAR** / **FACE TARGET** warning when auto attack is on but your swings can't land
 - Soft one-shot sound for the non-seal warnings (separately toggleable)
+- Pick the alert sound and the soft sound from dropdowns in the options panel (selecting one previews it)
 - Combat-start grace period so it doesn't nag while you cast your opening seal
 - Optional hiding while mounted or in a vehicle
 - Draggable, resizable icon; options panel via `/seal config`

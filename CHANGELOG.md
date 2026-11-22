@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.6
+
+- Changed: the soft cue sound no longer uses the whisper sound; now a map ping.
+- Added: sound dropdowns in the options panel to pick the alert and soft sounds (selecting one previews it).
+
 ## 1.0.5
 
 - Added: soft one-shot sound for the expiring, no auto attack, too far and facing warnings (`/seal sound2`, or the options panel).
