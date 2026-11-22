@@ -13,6 +13,8 @@ local FALLBACK_ICON = "Interface\\Icons\\Ability_ThunderBolt"
 local ATTACK_ICON = "Interface\\Icons\\Ability_MeleeDamage"
 local AUTO_ATTACK_ID = 6603
 local SWING_HOLD = 3    -- seconds a failed-swing warning stays up after the last error
+local NOATTACK_DELAY = 0.5  -- seconds not swinging before the cue shows
+local SOFT_COOLDOWN = 2     -- min seconds between soft cues, so flapping states don't spam
 
 -- Red error text the client prints when an auto-attack swing can't land.
 local SWING_ERRORS = {}
@@ -22,6 +24,7 @@ if ERR_BADATTACKFACING then SWING_ERRORS[ERR_BADATTACKFACING] = "facing" end  --
 local defaults = {
     enabled = true,
     sound = true,
+    soundOther = true,   -- soft one-shot cue for expiring / no attack / range / facing
     size = 64,
     point = { "CENTER", "UIParent", "CENTER", 0, 180 },
     warnTime = 5,        -- seconds left to show the "expiring" cue, 0 = off
@@ -58,6 +61,14 @@ local testUntil = 0
 local autoAttacking = false
 local swingFail             -- "toofar" | "facing": why the last swing couldn't land
 local swingFailUntil = 0    -- GetTime() that warning lapses unless the error repeats
+local lastSoft = 0          -- GetTime() of the last soft cue
+local noAttackSince         -- GetTime() we first saw "in combat, not swinging", nil = n/a
+
+local DISCORD_URL = "https://discord.gg/6QXzmaSjW"
+local ISSUES_URL = "https://github.com/joshespi/espi-paladin-utils/issues"
+local DONATE_BTC = "bc1q3742790fs0xe93nlcj3e4ta5m0fenykkt5euqq"
+
+local VERSION = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)("SealCheck", "Version") or "?"
 
 local function Print(msg)
     print("|cffff5555" .. ADDON_TITLE .. "|r: " .. msg)
@@ -132,6 +143,9 @@ end
 local ev = CreateFrame("Frame")
 
 local function CombatState(now)
+    -- cleared on every path; only the no-attack branch below keeps it alive
+    local since = noAttackSince
+    noAttackSince = nil
     if not db.enabled or not inCombat then return nil end
     if UnitIsDeadOrGhost("player") then return nil end
     if db.hideMounted and IsMounted() then return nil end
@@ -146,13 +160,17 @@ local function CombatState(now)
         end
     end
 
-    if settled and db.attackAlert
+    local wantsSwing = settled and db.attackAlert
         and UnitExists("target") and UnitCanAttack("player", "target")
-        and not UnitIsDeadOrGhost("target") and UnitAffectingCombat("target") then
-        if not autoAttacking then return "noattack" end
-        -- auto attack is on, but swings are bouncing off range/facing
-        if now < swingFailUntil then return swingFail end
+        and not UnitIsDeadOrGhost("target") and UnitAffectingCombat("target")
+    if wantsSwing and not autoAttacking then
+        -- brief debounce so a swing toggling on doesn't flash the cue
+        noAttackSince = since or now
+        if now - noAttackSince >= NOATTACK_DELAY then return "noattack" end
+        return nil
     end
+    -- auto attack is on, but swings are bouncing off range/facing
+    if wantsSwing and now < swingFailUntil then return swingFail end
     return nil
 end
 
@@ -188,13 +206,17 @@ local function Update()
     local now = GetTime()
     local state = GetState(now)
 
-    if state == "alert" and db.sound then
+    if state == "alert" then
         local fresh = visual ~= "alert"
         local again = db.repeatEvery > 0 and now - lastPing >= db.repeatEvery
-        if fresh or again then
+        if db.sound and (fresh or again) then
             PlaySound(SOUNDKIT.RAID_WARNING, "Master")
             lastPing = now
         end
+    elseif state and state ~= "unlock" and state ~= visual and db.soundOther
+        and SOUNDKIT.TELL_MESSAGE and now - lastSoft >= SOFT_COOLDOWN then
+        PlaySound(SOUNDKIT.TELL_MESSAGE, "Master")
+        lastSoft = now
     end
 
     -- countdown on the icon while the seal is about to drop
@@ -231,6 +253,7 @@ local NUMBERS = {
 local TOGGLES = {
     { key = "enabled",     panel = "Enable " .. ADDON_TITLE },
     { key = "sound",       panel = "Play warning sound",      cmd = "sound",   chat = "sound" },
+    { key = "soundOther",  panel = "Soft sound for other warnings", cmd = "sound2", chat = "soft warning sound" },
     { key = "attackAlert", panel = "Warn when not auto attacking or swings can't land", cmd = "attack", chat = "auto attack warning" },
     { key = "hideMounted", panel = "Hide while mounted",      cmd = "mounted", chat = "hide while mounted" },
     { key = "hideVehicle", panel = "Hide while in a vehicle", cmd = "vehicle", chat = "hide in vehicle" },
@@ -323,7 +346,7 @@ local function BuildOptions()
 
     local sub = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-    sub:SetText("Warns you in combat when you have no Seal active.")
+    sub:SetText("Warns you in combat when you have no Seal active.  v" .. VERSION)
 
     local y = -80
 
@@ -391,6 +414,34 @@ local function BuildOptions()
     refreshers[#refreshers + 1] = function() lockBtn:SetText(unlocked and "Lock" or "Unlock") end
     Button("Test", StartTest, 144)
     Button("Reset position", ResetLayout, 272)
+    y = y - 40
+
+    local prev
+    local function CopyBox(label, text, width)
+        local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        if prev then
+            fs:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", -6, -16)
+        else
+            fs:SetPoint("TOPLEFT", 16, y)
+        end
+        fs:SetText(label)
+        local box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+        box:SetSize(width, 20)
+        box:SetPoint("TOPLEFT", fs, "BOTTOMLEFT", 6, -6)
+        box:SetAutoFocus(false)
+        box:SetText(text)
+        box:SetCursorPosition(0)
+        box:SetScript("OnEditFocusGained", box.HighlightText)
+        box:SetScript("OnTextChanged", function(self, user)
+            if user then self:SetText(text); self:HighlightText() end
+        end)
+        box:SetScript("OnEscapePressed", box.ClearFocus)
+        prev = box
+    end
+
+    CopyBox("Feature requests and bug reports (Discord, Ctrl+C to copy):", DISCORD_URL, 240)
+    CopyBox("Bug reports (GitHub issues, Ctrl+C to copy):", ISSUES_URL, 320)
+    CopyBox("Enjoying the addon? Donations (BTC, Ctrl+C to copy):", DONATE_BTC, 300)
 
     panel:SetScript("OnShow", RefreshOptions)
 
@@ -520,9 +571,10 @@ local HELP = {
     "/seal config - open options panel",
     "/seal unlock | lock - move the icon",
     "/seal test - preview the alert",
-    "/seal toggle | sound | attack | mounted | vehicle - toggles",
+    "/seal toggle | sound | sound2 | attack | mounted | vehicle - toggles",
     "/seal size <16-256> | warn <sec> | repeat <sec> | grace <sec>",
     "/seal reset | status",
+    "Feedback / bugs: " .. DISCORD_URL .. " | " .. ISSUES_URL,
 }
 
 SLASH_SEALCHECK1 = "/sealcheck"
@@ -564,6 +616,11 @@ SlashCmdList.SEALCHECK = function(msg)
     elseif cmd == "test" then
         StartTest()
         Print(string.format("previewing alert for %ds", TEST_SECS))
+    elseif cmd == "discord" then
+        Print("feature requests and bug reports: " .. DISCORD_URL)
+        Print("GitHub issues: " .. ISSUES_URL)
+    elseif cmd == "donate" then
+        Print("BTC donations (optional, appreciated): " .. DONATE_BTC)
     elseif cmd == "reset" then
         ResetLayout()
         Print("position and size reset")
@@ -573,6 +630,7 @@ SlashCmdList.SEALCHECK = function(msg)
             or sealExpires == math.huge and "no expiry"
             or left > 0 and string.format("%.0fs left (est.)", left)
             or "expired"
+        Print("v" .. VERSION .. " " .. OnOff(db.enabled))
         Print("seal: " .. s .. (blind and ", blind this fight" or ""))
         for name, dur in pairs(db.durations) do
             Print(string.format("  %s = %ds", name, dur))
