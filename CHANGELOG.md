@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.5
+
+- Added: soft one-shot sound for the expiring, no auto attack, too far and facing warnings (`/seal sound2`, or the options panel).
+- Added: short debounce on the NO AUTO ATTACK warning so it doesn't flash when swings toggle on.
+- Added: `/seal discord` and `/seal donate`, plus copyable feedback and donation links in the options panel.
+- Added: addon version shown in the options panel and `/seal status`.
+
 ## 1.0.4
 
 - Changed: addon renamed to Espi Paladin Utils (display name only; settings and `/seal` commands are unchanged).
