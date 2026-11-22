@@ -3,10 +3,11 @@
 ## Notes: Warns in combat when no Seal is active. /seal config for options.
 ## Author: joshe
 ## Category: Combat
-## Version: 1.0.4
+## Version: 1.0.5
 ## IconTexture: Interface\Icons\Ability_ThunderBolt
 ## SavedVariables: SealCheckDB
 ## X-License: MIT
+## X-Website: https://github.com/joshespi/espi-paladin-utils
 ## X-Category: Combat
 ## X-Curse-Project-ID: 1793360
 

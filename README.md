@@ -11,6 +11,7 @@ Buffs are hidden ("secret") in combat, so it tracks your seal by watching your o
 - Optional repeating sound while unsealed
 - **NO AUTO ATTACK** warning when you're in combat but not auto-attacking
 - **TOO FAR** / **FACE TARGET** warning when auto attack is on but your swings can't land
+- Soft one-shot sound for the non-seal warnings (separately toggleable)
 - Combat-start grace period so it doesn't nag while you cast your opening seal
 - Optional hiding while mounted or in a vehicle
 - Draggable, resizable icon; options panel via `/seal config`
@@ -26,6 +27,7 @@ Buffs are hidden ("secret") in combat, so it tracks your seal by watching your o
 | `test` | Preview the alert for 3 seconds |
 | `toggle` | Enable / disable the addon |
 | `sound` | Toggle the warning sound |
+| `sound2` | Toggle the soft sound for expiring / auto attack / range / facing warnings |
 | `attack` | Toggle the "NO AUTO ATTACK" and "TOO FAR" / "FACE TARGET" warnings |
 | `mounted` / `vehicle` | Toggle hiding while mounted / in a vehicle |
 | `size <16-256>` | Icon size in pixels |
@@ -34,6 +36,15 @@ Buffs are hidden ("secret") in combat, so it tracks your seal by watching your o
 | `grace <sec>` | Delay after combat starts before alerting |
 | `reset` | Reset position and size |
 | `status` | Show tracked seal state and learned durations |
+| `discord` | Print the Discord and GitHub issues links |
+| `donate` | Print the BTC donation address |
+
+## Feedback
+Feature requests and bug reports: [Discord](https://discord.gg/6QXzmaSjW)
+Bug reports: [GitHub issues](https://github.com/joshespi/espi-paladin-utils/issues)
+
+## Support
+Totally optional. If you want to chip in, BTC: `bc1q3742790fs0xe93nlcj3e4ta5m0fenykkt5euqq`
 
 ## Installation
 Extract the `SealCheck` folder into your `Interface/AddOns` directory.
